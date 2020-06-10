@@ -1,0 +1,56 @@
+from sklearn import preprocessing 
+import pandas as pd
+import numpy as np
+from datetime import datetime
+from datetime import timedelta
+# 所有股票(用日线数据获取),并且排除过高，过低价格
+gupiao=DataSource('bar1d_CN_STOCK_A').read(start_date='2020-06-01',end_date='2020-06-01',fields=['instrument','low'])[['instrument','low']]
+gupiao=gupiao[(gupiao['low']>6) & (gupiao['low']<40)]['instrument']
+
+#当天macd为负数，K,D小于50的股票（大约1700只股票）
+features=pd.DataFrame(columns=['date','ta_macd_macdhist_12_26_9_0','ta_stoch_slowd_5_3_0_3_0_0','ta_stoch_slowk_5_3_0_3_0_0'])
+for i in gupiao:
+    hh=D.features(i, start_date='2020-06-01', end_date='2020-06-01', fields=['ta_macd_macdhist_12_26_9_0','ta_stoch_slowd_5_3_0_3_0_0','ta_stoch_slowk_5_3_0_3_0_0'])
+    features=features.append(hh)
+features.rename(columns={'ta_macd_macdhist_12_26_9_0':'macd','ta_stoch_slowd_5_3_0_3_0_0':'jdk_d','ta_stoch_slowk_5_3_0_3_0_0':'jdk_k'},inplace=True)
+gupiao=features[(features['macd']<-0.1) & (features['jdk_d']<50) & (features['jdk_k']<50)]['instrument']
+
+# 取满足上一个条件的相关历史数据（4个月）并按照，股票、时间，降序排列，按照日期向前寻找，跌、涨、跌 波动3次的历史数据
+features=pd.DataFrame(columns=['date','ta_macd_macdhist_12_26_9_0','ta_stoch_slowd_5_3_0_3_0_0','ta_stoch_slowk_5_3_0_3_0_0'])
+alldata=pd.DataFrame(columns=['date','ta_macd_macdhist_12_26_9_0','ta_stoch_slowd_5_3_0_3_0_0','ta_stoch_slowk_5_3_0_3_0_0'])
+for i in gupiao:
+    xy=D.features(i, start_date='2020-02-05', end_date='2020-06-01', fields=['ta_macd_macdhist_12_26_9_0','ta_stoch_slowd_5_3_0_3_0_0','ta_stoch_slowk_5_3_0_3_0_0'])
+    xy['ZD']=xy['ta_macd_macdhist_12_26_9_0'].apply(lambda x:0 if x<0 else 1)
+    xy=xy.sort_values('date',ascending=False)
+    lists=xy['ZD']
+    count=1
+    m=lists[0]
+    for i, val in enumerate(lists):
+        if count<4:
+            alldata=alldata.append(xy[i-1:i])
+            if  val!=m:
+                count+=1
+                m=val 
+                
+alldata.rename(columns={'ta_macd_macdhist_12_26_9_0':'macd','ta_stoch_slowd_5_3_0_3_0_0':'jdk_d','ta_stoch_slowk_5_3_0_3_0_0':'jdk_k'},inplace=True)
+
+alldata=alldata[['date','instrument','macd']].reset_index()
+fuzhu=pd.DataFrame(alldata.groupby(['instrument'])['macd'].min()).reset_index()
+newdata=pd.merge(fuzhu,alldata,how='inner',on=['instrument','macd'])[['instrument','macd','date']]
+#macd最小
+newdata=newdata[newdata['date']<'2020-05-27']
+newdata.rename(columns={'date':'mindate'},inplace=True)
+
+zuixin=alldata[alldata.date=='2020-06-01'][['date','instrument','macd']]
+newdata=pd.merge(zuixin,newdata,how='inner',on=['instrument'])
+
+rixian=DataSource('bar1d_CN_STOCK_A').read(start_date='2020-02-05',end_date='2020-06-01',fields=['instrument','low'])[['instrument','low','date']]
+
+newdata=pd.merge(rixian,newdata,how='inner',on=['instrument','date'])
+newdata.rename(columns={'low':'t_price','macd_x':'t_macd','macd_y':'old_macd','date':'today'},inplace=True)
+newdata.rename(columns={'mindate':'date'},inplace=True)
+newdata=pd.merge(rixian,newdata,how='inner',on=['instrument','date'])
+newdata.rename(columns={'date':'olddate','low':'oldprice'},inplace=True)
+gupiaochi=newdata[newdata.t_price<=newdata.oldprice]['instrument']
+print(gupiaochi)
+    
